@@ -11,7 +11,7 @@ class PaymentClaim(models.Model):
         REJECTED = "REJECTED", "Rejected"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payment_claims")
-    reference_code = models.CharField(max_length=9, db_index=True)
+    reference_code = models.CharField(max_length=16, db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=32, choices=Status.choices, default=Status.PENDING_REVIEW, db_index=True)
     admin_note = models.TextField(blank=True)
@@ -29,7 +29,7 @@ class AdminNotification(models.Model):
         PAYMENT_REJECTED = "PAYMENT_REJECTED", "Payment rejected"
 
     type = models.CharField(max_length=64, choices=Type.choices)
-    reference_code = models.CharField(max_length=9, db_index=True)
+    reference_code = models.CharField(max_length=16, db_index=True)
     claim = models.ForeignKey(PaymentClaim, on_delete=models.CASCADE, related_name="notifications")
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
