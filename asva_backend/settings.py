@@ -11,13 +11,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me-in-production")
 
-DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes")
 
-ALLOWED_HOSTS: list[str] = os.getenv("DJANGO_ALLOWED_HOSTS", "").split() or ["localhost", "127.0.0.1"]
+# Comma or whitespace separated. In production set DJANGO_DEBUG=false and list real hostnames.
+_raw_hosts = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").replace(",", " ").split() if h.strip()]
+ALLOWED_HOSTS: list[str] = _raw_hosts or ["localhost", "127.0.0.1"]
+# So local runserver / curl still work when DJANGO_ALLOWED_HOSTS lists only a public hostname.
+for _h in ("localhost", "127.0.0.1"):
+    if _h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_h)
+if DEBUG and "testserver" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
 
-CSRF_TRUSTED_ORIGINS = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split()
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").replace(",", " ").split() if o.strip()]
 
 NEXTJS_ORIGINS = os.getenv("NEXTJS_ORIGINS", "")
+
+# Outbound webhook: Django calls Next.js on-demand revalidation when Content is published.
+NEXTJS_WEBHOOK_SECRET = os.getenv("NEXTJS_WEBHOOK_SECRET", "")
+NEXTJS_REVALIDATE_URL = os.getenv("NEXTJS_REVALIDATE_URL", "")
+# Path sent to Next for each slug, e.g. "/blog/{slug}" or "/{slug}"
+NEXTJS_REVALIDATE_PATH_TEMPLATE = os.getenv("NEXTJS_REVALIDATE_PATH_TEMPLATE", "/{slug}")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -30,7 +44,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "accounts",
     "payments",
-    "cms",
+    "cms.apps.CmsConfig",
 ]
 
 MIDDLEWARE = [
@@ -66,15 +80,23 @@ WSGI_APPLICATION = "asva_backend.wsgi.application"
 ASGI_APPLICATION = "asva_backend.asgi.application"
 
 
-DATABASES = {
-    "default": dj_database_url.parse(
-        os.environ.get("DATABASE_URL"),
-        conn_max_age=600,
-        conn_health_checks=True,
-        ssl_require=True,
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-    )
-}
+_database_url = os.environ.get("DATABASE_URL")
+if _database_url:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            _database_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True,
+        )
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -121,8 +143,15 @@ REST_FRAMEWORK = {
 
 CORS_ALLOW_CREDENTIALS = True
 
-if NEXTJS_ORIGINS:
-    CORS_ALLOWED_ORIGINS = NEXTJS_ORIGINS.split()
+_nextjs_origins = [o.strip() for o in NEXTJS_ORIGINS.replace(",", " ").split() if o.strip()]
+if _nextjs_origins:
+    CORS_ALLOWED_ORIGINS = _nextjs_origins
+elif DEBUG:
+    # Local Next.js dev server; set NEXTJS_ORIGINS in production instead of relying on this.
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 else:
-    CORS_ALLOW_ALL_ORIGINS = DEBUG
+    CORS_ALLOW_ALL_ORIGINS = False
 

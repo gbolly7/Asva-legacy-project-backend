@@ -10,6 +10,22 @@ from .serializers import ReferenceSerializer, RegisterSerializer
 User = get_user_model()
 
 
+class AuthApiRootView(APIView):
+    """GET /api/auth/ — lists auth routes (no trailing resource at this path otherwise 404)."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        return Response(
+            {
+                "detail": "ASVA auth API",
+                "endpoints": {
+                    "register": {"method": "POST", "url": "/api/auth/register"},
+                },
+            }
+        )
+
+
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -17,7 +33,16 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        return Response({"id": user.id, "username": user.username, "email": user.email}, status=status.HTTP_201_CREATED)
+        profile = user.profile
+        return Response(
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "reference_code": profile.reference_code,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ReferenceView(APIView):

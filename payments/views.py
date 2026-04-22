@@ -56,8 +56,12 @@ class AdminRejectPaymentView(APIView):
 
     def post(self, request, pk, *args, **kwargs):
         claim = get_object_or_404(PaymentClaim, pk=pk)
+        update_fields = ["status", "updated_at"]
+        if "admin_note" in request.data:
+            claim.admin_note = request.data.get("admin_note") or ""
+            update_fields.append("admin_note")
         claim.status = PaymentClaim.Status.REJECTED
-        claim.save(update_fields=["status", "updated_at"])
+        claim.save(update_fields=update_fields)
         AdminNotification.objects.create(
             type=AdminNotification.Type.PAYMENT_REJECTED,
             reference_code=claim.reference_code,
